@@ -360,7 +360,7 @@
   document.getElementById("editBtn").onclick = function(){
     var on = document.body.classList.toggle("editing");
     this.textContent = on ? "Done" : "Edit habits";
-    document.getElementById("addRow").style.display = on ? "flex" : "none"; render();
+    document.getElementById("addRow").style.display = on ? "flex" : "none"; if(document.activeElement && document.activeElement.blur){ document.activeElement.blur(); } render();
   };
   function addHabit(){
     var inp=document.getElementById("addInput"); var v=inp.value.trim(); if(!v) return;
