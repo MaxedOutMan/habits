@@ -331,7 +331,7 @@
       var li=document.createElement("li"); li.className="habit"+(isDone?" done":"");
       var chk=document.createElement("div"); chk.className="check";
       chk.innerHTML='<svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6"/></svg>';
-      var name; if(editing){ name=document.createElement("input"); name.className="name"; name.type="text"; name.value=h.name; name.onclick=function(e){ e.stopPropagation(); }; name.onchange=function(){ var nn=name.value.trim(); if(nn && nn!==h.name){ h.name=nn; saveCache(); push({action:"renameHabit", id:h.id, name:nn}); } else { name.value=h.name; } }; } else { name=document.createElement("div"); name.className="name"; name.textContent=h.name; }
+      var name; if(editing){ name=document.createElement("input"); name.className="name"; name.type="text"; name.value=h.name; name.onclick=function(e){ e.stopPropagation(); }; name.onblur=function(){ var nn=name.value.trim(); if(nn && nn!==h.name){ h.name=nn; saveCache(); push({action:"renameHabit", id:h.id, name:nn}); } else { name.value=h.name; } }; } else { name=document.createElement("div"); name.className="name"; name.textContent=h.name; }
       var del=document.createElement("button"); del.className="del"; del.textContent="✕";
       del.onclick=function(e){
         e.stopPropagation();
