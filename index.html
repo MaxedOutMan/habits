@@ -52,7 +52,7 @@
     stroke-dasharray:24;stroke-dashoffset:24;transition:stroke-dashoffset .2s ease;}
   li.done .check{background:var(--accent);border-color:var(--accent);}
   li.done .check svg{stroke-dashoffset:0;}
-  .name{flex:1;font-size:17px;font-weight:600;line-height:1.25;}
+  .name{flex:1;font-size:17px;font-weight:600;line-height:1.25;} input.name{border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-family:inherit;color:var(--ink);background:#fff;outline:none;width:100%;} input.name:focus{border-color:var(--blue);}
   li.done .name{color:var(--ink-soft);text-decoration:line-through;text-decoration-color:var(--line);}
   .del{flex:0 0 auto;width:30px;height:30px;border-radius:8px;border:none;background:transparent;
     color:var(--ink-soft);font-size:18px;display:none;align-items:center;justify-content:center;cursor:pointer;}
@@ -322,7 +322,7 @@
   function render(){
     document.getElementById("dateLabel").textContent = prettyDate();
     var tk = todayKey();
-    var doneToday = state.done[tk] || {};
+    var doneToday = state.done[tk] || {}; var editing = document.body.classList.contains("editing");
     listEl.innerHTML = "";
     var doneCount = 0;
     state.habits.forEach(function(h){
@@ -331,7 +331,7 @@
       var li=document.createElement("li"); li.className="habit"+(isDone?" done":"");
       var chk=document.createElement("div"); chk.className="check";
       chk.innerHTML='<svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6"/></svg>';
-      var name=document.createElement("div"); name.className="name"; name.textContent=h.name;
+      var name; if(editing){ name=document.createElement("input"); name.className="name"; name.type="text"; name.value=h.name; name.onclick=function(e){ e.stopPropagation(); }; name.onchange=function(){ var nn=name.value.trim(); if(nn && nn!==h.name){ h.name=nn; saveCache(); push({action:"renameHabit", id:h.id, name:nn}); } else { name.value=h.name; } }; } else { name=document.createElement("div"); name.className="name"; name.textContent=h.name; }
       var del=document.createElement("button"); del.className="del"; del.textContent="✕";
       del.onclick=function(e){
         e.stopPropagation();
@@ -360,7 +360,7 @@
   document.getElementById("editBtn").onclick = function(){
     var on = document.body.classList.toggle("editing");
     this.textContent = on ? "Done" : "Edit habits";
-    document.getElementById("addRow").style.display = on ? "flex" : "none";
+    document.getElementById("addRow").style.display = on ? "flex" : "none"; render();
   };
   function addHabit(){
     var inp=document.getElementById("addInput"); var v=inp.value.trim(); if(!v) return;
@@ -395,7 +395,7 @@
   // ---------- screens ----------
   function showApp(){
     document.body.classList.remove("firstrun","loading");
-    document.getElementById("footer").style.display="flex";
+    document.getElementById("footer").style.display="flex"; var GG=["Hello, beautiful","Hey Wonder Woman, ready to save the day?","Morning, warrior. Let's go.","Suit up, beautiful.","Time to shine, gorgeous.","Let's make today legendary.","Another day, another victory.","You've got this, beautiful.","Go get 'em, Wonder Woman.","Ready to conquer today?","Look at you, unstoppable.","The world's lucky to have you."]; var _hg=document.querySelector(".app .hello"); if(_hg){ _hg.textContent=GG[Math.floor(Math.random()*GG.length)]; }
   }
   function showSetup(){
     document.body.classList.add("firstrun");
