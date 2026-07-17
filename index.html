@@ -57,7 +57,7 @@
   .del{flex:0 0 auto;width:30px;height:30px;border-radius:8px;border:none;background:transparent;
     color:var(--ink-soft);font-size:18px;display:none;align-items:center;justify-content:center;cursor:pointer;}
   body.editing .del{display:flex;}
-  body.editing li.habit{cursor:default;}
+  body.editing li.habit{cursor:default;} .grip{flex:0 0 auto;width:34px;height:34px;border:none;background:transparent;color:var(--ink-soft);font-size:22px;line-height:1;display:none;align-items:center;justify-content:center;cursor:grab;touch-action:none;-webkit-user-select:none;user-select:none;} body.editing .grip{display:flex;} li.habit.dragging{opacity:.7;box-shadow:0 10px 26px rgba(18,50,74,.22);transform:scale(1.01);}
 
   .alldone{text-align:center;padding:26px 16px;margin-top:6px;color:var(--blue);font-weight:700;font-size:16px;
     background:var(--gold-soft);border:1px solid #f0dfa0;border-radius:16px;display:none;}
@@ -328,7 +328,7 @@
     state.habits.forEach(function(h){
       var isDone = !!doneToday[h.id];
       if(isDone) doneCount++;
-      var li=document.createElement("li"); li.className="habit"+(isDone?" done":"");
+      var li=document.createElement("li"); li.className="habit"+(isDone?" done":""); li.setAttribute("data-id", h.id);
       var chk=document.createElement("div"); chk.className="check";
       chk.innerHTML='<svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6"/></svg>';
       var name; if(editing){ name=document.createElement("input"); name.className="name"; name.type="text"; name.value=h.name; name.onclick=function(e){ e.stopPropagation(); }; name.onblur=function(){ var nn=name.value.trim(); if(nn && nn!==h.name){ h.name=nn; saveCache(); push({action:"renameHabit", id:h.id, name:nn}); } else { name.value=h.name; } }; } else { name=document.createElement("div"); name.className="name"; name.textContent=h.name; }
@@ -339,7 +339,7 @@
         saveCache(); render();
         push({action:"deleteHabit", id:h.id});
       };
-      li.appendChild(chk); li.appendChild(name); li.appendChild(del);
+      li.appendChild(chk); li.appendChild(name); li.appendChild(del); if(editing){ var grip=document.createElement("button"); grip.className="grip"; grip.setAttribute("aria-label","Drag to reorder"); grip.innerHTML="&#9776;"; li.appendChild(grip); }
       li.onclick=function(){
         if(document.body.classList.contains("editing")) return;
         var d = state.done[tk] || (state.done[tk]={});
@@ -357,7 +357,7 @@
   }
 
   // ---------- edit mode ----------
-  document.getElementById("editBtn").onclick = function(){
+  var dragLi=null; listEl.addEventListener("pointerdown", function(e){ var grip=e.target.closest&&e.target.closest(".grip"); if(!grip) return; if(!document.body.classList.contains("editing")) return; dragLi=grip.closest("li.habit"); if(!dragLi) return; dragLi.classList.add("dragging"); try{ listEl.setPointerCapture(e.pointerId); }catch(err){} e.preventDefault(); }); listEl.addEventListener("pointermove", function(e){ if(!dragLi) return; e.preventDefault(); var y=e.clientY; var items=Array.prototype.slice.call(listEl.querySelectorAll("li.habit")); var placed=false; for(var i=0;i<items.length;i++){ var it=items[i]; if(it===dragLi) continue; var r=it.getBoundingClientRect(); if(y<r.top+r.height/2){ listEl.insertBefore(dragLi,it); placed=true; break; } } if(!placed) listEl.appendChild(dragLi); }); function endDrag(){ if(!dragLi) return; dragLi.classList.remove("dragging"); dragLi=null; var ids=Array.prototype.map.call(listEl.querySelectorAll("li.habit"), function(li){ return li.getAttribute("data-id"); }); state.habits.sort(function(a,b){ return ids.indexOf(a.id)-ids.indexOf(b.id); }); saveCache(); push({action:"setHabits", habits: state.habits.map(function(h){ return {id:h.id, name:h.name}; })}); } listEl.addEventListener("pointerup", endDrag); listEl.addEventListener("pointercancel", endDrag); document.getElementById("editBtn").onclick = function(){
     var on = document.body.classList.toggle("editing");
     this.textContent = on ? "Done" : "Edit habits";
     document.getElementById("addRow").style.display = on ? "flex" : "none"; if(document.activeElement && document.activeElement.blur){ document.activeElement.blur(); } render();
@@ -440,7 +440,7 @@
   setInterval(function(){
     if(todayKey()!==lastDay){ lastDay=todayKey(); render(); }
     syncCycle();
-  }, 30*1000);
+  }, 15*1000); window.addEventListener("focus", function(){ syncCycle(); }); window.addEventListener("pageshow", function(){ syncCycle(); }); (function(){ var _pill=document.getElementById("syncPill"); if(_pill){ _pill.style.cursor="pointer"; _pill.title="Tap to refresh"; _pill.onclick=function(){ setSync("saving","Refreshing..."); syncCycle(); }; } })();
 
   // sync when the app comes back to the foreground (opening from home screen)
   document.addEventListener("visibilitychange", function(){
