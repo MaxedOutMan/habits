@@ -86,6 +86,16 @@
     background:linear-gradient(to top,var(--bg) 70%,rgba(246,244,239,0));display:flex;gap:10px;max-width:520px;margin:0 auto;}
   .footer .btn{flex:1;height:52px;}
 
+  /* top edit bar — stays above the on-screen keyboard so Done is always reachable */
+  .editbar{display:none;position:fixed;top:0;left:0;right:0;z-index:60;
+    align-items:center;justify-content:space-between;gap:12px;
+    padding:calc(8px + env(safe-area-inset-top)) 18px 8px;
+    background:var(--card);border-bottom:1px solid var(--line);box-shadow:var(--shadow);}
+  .editbar-label{font-size:15px;font-weight:700;color:var(--ink);}
+  .editbar .btn{height:40px;padding:0 22px;flex:0 0 auto;}
+  body.editing .editbar{display:flex;}
+  body.editing .app{padding-top:52px;}
+
   /* sync pill */
   .sync{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--ink-soft);margin-top:12px;}
   .sync .dot{width:8px;height:8px;border-radius:99px;background:var(--ink-soft);}
@@ -181,6 +191,11 @@
       <div id="backupMsg" style="font-size:12px;color:var(--accent);margin-top:8px;min-height:16px;"></div>
     </div>
   </section>
+</div>
+
+<div class="editbar" id="editBar">
+  <span class="editbar-label">Editing habits</span>
+  <button class="btn" id="editDone">Done</button>
 </div>
 
 <div class="footer" id="footer" style="display:none;">
@@ -483,13 +498,18 @@
   listEl.addEventListener("pointercancel", endDrag);
 
   // ---------- edit mode ----------
-  document.getElementById("editBtn").onclick = function(){
+  function setEditing(on){
     if(document.activeElement && document.activeElement.blur){ document.activeElement.blur(); }
-    var on = document.body.classList.toggle("editing");
-    this.textContent = on ? "Done" : "Edit habits";
+    document.body.classList.toggle("editing", on);
+    document.getElementById("editBtn").textContent = on ? "Done" : "Edit habits";
     document.getElementById("addRow").style.display = on ? "flex" : "none";
+    if(on){ window.scrollTo(0,0); }
     render();
+  }
+  document.getElementById("editBtn").onclick = function(){
+    setEditing(!document.body.classList.contains("editing"));
   };
+  document.getElementById("editDone").onclick = function(){ setEditing(false); };
   function addHabit(){
     var inp=document.getElementById("addInput"); var v=inp.value.trim(); if(!v) return;
     var h={id:uid(), name:v}; state.habits.push(h); inp.value=""; saveCache(); render(); inp.focus();
