@@ -52,16 +52,28 @@
     stroke-dasharray:24;stroke-dashoffset:24;transition:stroke-dashoffset .2s ease;}
   li.done .check{background:var(--accent);border-color:var(--accent);}
   li.done .check svg{stroke-dashoffset:0;}
-  .name{flex:1;font-size:17px;font-weight:600;line-height:1.25;} input.name{border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-family:inherit;color:var(--ink);background:#fff;outline:none;width:100%;} input.name:focus{border-color:var(--blue);}
+  .name{flex:1;font-size:17px;font-weight:600;line-height:1.25;}
+  input.name{border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-family:inherit;color:var(--ink);background:#fff;outline:none;width:100%;}
+  input.name:focus{border-color:var(--blue);}
   li.done .name{color:var(--ink-soft);text-decoration:line-through;text-decoration-color:var(--line);}
   .del{flex:0 0 auto;width:30px;height:30px;border-radius:8px;border:none;background:transparent;
     color:var(--ink-soft);font-size:18px;display:none;align-items:center;justify-content:center;cursor:pointer;}
   body.editing .del{display:flex;}
-  body.editing li.habit{cursor:default;} .grip{flex:0 0 auto;width:34px;height:34px;border:none;background:transparent;color:var(--ink-soft);font-size:22px;line-height:1;display:none;align-items:center;justify-content:center;cursor:grab;touch-action:none;-webkit-user-select:none;user-select:none;} body.editing .grip{display:flex;} li.habit.dragging{opacity:.7;box-shadow:0 10px 26px rgba(18,50,74,.22);transform:scale(1.01);}
+  body.editing li.habit{cursor:default;}
+  .grip{flex:0 0 auto;width:34px;height:34px;border:none;background:transparent;color:var(--ink-soft);font-size:22px;line-height:1;display:none;align-items:center;justify-content:center;cursor:grab;touch-action:none;-webkit-user-select:none;user-select:none;}
+  body.editing .grip{display:flex;}
+  li.habit.dragging{opacity:.7;box-shadow:0 10px 26px rgba(18,50,74,.22);transform:scale(1.01);}
 
   .alldone{text-align:center;padding:26px 16px;margin-top:6px;color:var(--blue);font-weight:700;font-size:16px;
     background:var(--gold-soft);border:1px solid #f0dfa0;border-radius:16px;display:none;}
   body.complete .alldone{display:block;}
+  .section-label{font-size:12px;font-weight:800;letter-spacing:.8px;text-transform:uppercase;color:var(--blue);margin:18px 2px 10px;}
+  .section-label.rest{color:var(--ink-soft);}
+  .wins-hint{color:var(--ink-soft);font-size:13px;line-height:1.4;margin:2px 2px 6px;}
+  .star{flex:0 0 auto;width:34px;height:34px;border:none;background:transparent;font-size:21px;line-height:1;color:var(--ink-soft);display:flex;align-items:center;justify-content:center;cursor:pointer;}
+  .star.on{color:var(--gold);}
+  body.editing .star{display:none;}
+  li.habit.win{border-color:#e6cf8f;box-shadow:0 1px 2px rgba(0,0,0,.04),0 6px 18px rgba(215,173,81,.20);}
 
   .addrow{display:flex;gap:10px;margin-top:16px;}
   .addrow input{flex:1;font-size:16px;padding:14px 15px;border-radius:14px;border:1px solid var(--line);
@@ -146,7 +158,11 @@
       <div class="sync" id="syncPill"><span class="dot"></span><span id="syncText">Synced</span></div>
     </header>
 
-    <div class="alldone">All done for today. Nice work. ⭐</div>
+    <div class="alldone">All your wins done for today. Amazing. ⭐</div>
+    <div class="section-label" id="winsLabel">Today's Wins</div>
+    <ul class="list" id="winsList"></ul>
+    <p class="wins-hint" id="winsHint">Tap the ☆ on up to 5 things below to make them today's focus.</p>
+    <div class="section-label rest" id="restLabel">Everything else</div>
     <ul class="list" id="list"></ul>
 
     <div class="addrow" id="addRow" style="display:none;">
@@ -195,10 +211,12 @@
   // ---------- local cache ----------
   function loadCache(){
     try{ var r = localStorage.getItem(CACHE_KEY); if(r) return JSON.parse(r); }catch(e){}
-    return { habits:[], done:{} };
+    return { habits:[], done:{}, wins:{} };
   }
   function saveCache(){ try{ localStorage.setItem(CACHE_KEY, JSON.stringify(state)); }catch(e){} }
   var state = loadCache();
+  if(!state.done) state.done = {};
+  if(!state.wins) state.wins = {};
 
   // ---------- queue (pending cloud actions) ----------
   function loadQueue(){ try{ var r=localStorage.getItem(QUEUE_KEY); if(r) return JSON.parse(r); }catch(e){} return []; }
@@ -270,6 +288,7 @@
       if(res && res.ok){
         state.habits = res.habits || [];
         state.done = res.done || {};
+        state.wins = res.wins || {};
         saveCache();
         return true;
       }
@@ -319,48 +338,157 @@
 
   // ---------- main render ----------
   var listEl = document.getElementById("list");
+  var winsListEl = document.getElementById("winsList");
+  var winHintDefault = "Tap the ☆ on up to 5 things below to make them today's focus.";
+
+  function winCount(w){ var n=0; for(var k in w){ if(w[k]) n++; } return n; }
+
+  function toggleWin(h){
+    var tk = todayKey();
+    var w = state.wins[tk] || (state.wins[tk]={});
+    var isWin = !!w[h.id];
+    if(!isWin){
+      if(winCount(w) >= 5){ flashWinLimit(); return; }
+      w[h.id] = true;
+    } else { delete w[h.id]; }
+    saveCache(); render();
+    push({action:"toggleWin", date:tk, habitId:h.id, value: !isWin});
+  }
+  function flashWinLimit(){
+    var hint = document.getElementById("winsHint");
+    if(hint){
+      hint.style.display="block";
+      hint.textContent = "That's your 5 for today. Un-star one to swap it out.";
+      hint.style.color = "var(--accent)";
+      setTimeout(function(){ hint.textContent = winHintDefault; hint.style.color=""; render(); }, 2600);
+    }
+  }
+
+  function buildRow(h, tk, doneToday, winsToday, editing){
+    var isDone = !!doneToday[h.id];
+    var isWin = !!winsToday[h.id];
+    var li=document.createElement("li");
+    li.className="habit"+(isDone?" done":"")+((isWin&&!editing)?" win":"");
+    li.setAttribute("data-id", h.id);
+    var chk=document.createElement("div"); chk.className="check";
+    chk.innerHTML='<svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6"/></svg>';
+    var name;
+    if(editing){
+      name=document.createElement("input"); name.className="name"; name.type="text"; name.value=h.name;
+      name.onclick=function(e){ e.stopPropagation(); };
+      name.onblur=function(){
+        var nn=name.value.trim();
+        if(nn && nn!==h.name){ h.name=nn; saveCache(); push({action:"renameHabit", id:h.id, name:nn}); }
+        else { name.value=h.name; }
+      };
+    } else {
+      name=document.createElement("div"); name.className="name"; name.textContent=h.name;
+    }
+    li.appendChild(chk); li.appendChild(name);
+    if(editing){
+      var del=document.createElement("button"); del.className="del"; del.textContent="✕";
+      del.onclick=function(e){ e.stopPropagation();
+        state.habits = state.habits.filter(function(x){return x.id!==h.id;});
+        saveCache(); render(); push({action:"deleteHabit", id:h.id});
+      };
+      li.appendChild(del);
+      var grip=document.createElement("button"); grip.className="grip"; grip.setAttribute("aria-label","Drag to reorder"); grip.textContent="≡"; li.appendChild(grip);
+    } else {
+      var star=document.createElement("button"); star.className="star"+(isWin?" on":"");
+      star.textContent = isWin ? "★" : "☆"; star.setAttribute("aria-label","Make this a win for today");
+      star.onclick=function(e){ e.stopPropagation(); toggleWin(h); };
+      li.appendChild(star);
+    }
+    li.onclick=function(){
+      if(document.body.classList.contains("editing")) return;
+      var d = state.done[tk] || (state.done[tk]={});
+      var nowOn = !d[h.id];
+      if(nowOn) d[h.id]=true; else delete d[h.id];
+      saveCache(); render();
+      push({action:"toggle", date:tk, habitId:h.id, value:nowOn});
+    };
+    return li;
+  }
+
   function render(){
     document.getElementById("dateLabel").textContent = prettyDate();
     var tk = todayKey();
-    var doneToday = state.done[tk] || {}; var editing = document.body.classList.contains("editing");
-    listEl.innerHTML = "";
-    var doneCount = 0;
+    var doneToday = state.done[tk] || {};
+    var winsToday = state.wins[tk] || {};
+    var editing = document.body.classList.contains("editing");
+    listEl.innerHTML = ""; winsListEl.innerHTML = "";
+
+    var winHabits=[], restHabits=[];
     state.habits.forEach(function(h){
-      var isDone = !!doneToday[h.id];
-      if(isDone) doneCount++;
-      var li=document.createElement("li"); li.className="habit"+(isDone?" done":""); li.setAttribute("data-id", h.id);
-      var chk=document.createElement("div"); chk.className="check";
-      chk.innerHTML='<svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6"/></svg>';
-      var name; if(editing){ name=document.createElement("input"); name.className="name"; name.type="text"; name.value=h.name; name.onclick=function(e){ e.stopPropagation(); }; name.onblur=function(){ var nn=name.value.trim(); if(nn && nn!==h.name){ h.name=nn; saveCache(); push({action:"renameHabit", id:h.id, name:nn}); } else { name.value=h.name; } }; } else { name=document.createElement("div"); name.className="name"; name.textContent=h.name; }
-      var del=document.createElement("button"); del.className="del"; del.textContent="✕";
-      del.onclick=function(e){
-        e.stopPropagation();
-        state.habits = state.habits.filter(function(x){return x.id!==h.id;});
-        saveCache(); render();
-        push({action:"deleteHabit", id:h.id});
-      };
-      li.appendChild(chk); li.appendChild(name); li.appendChild(del); if(editing){ var grip=document.createElement("button"); grip.className="grip"; grip.setAttribute("aria-label","Drag to reorder"); grip.innerHTML="&#9776;"; li.appendChild(grip); }
-      li.onclick=function(){
-        if(document.body.classList.contains("editing")) return;
-        var d = state.done[tk] || (state.done[tk]={});
-        var nowOn = !d[h.id];
-        if(nowOn) d[h.id]=true; else delete d[h.id];
-        saveCache(); render();
-        push({action:"toggle", date:tk, habitId:h.id, value:nowOn});
-      };
-      listEl.appendChild(li);
+      if(!editing && winsToday[h.id]) winHabits.push(h); else restHabits.push(h);
     });
-    var total = state.habits.length;
-    document.getElementById("countLabel").textContent = doneCount+" of "+total;
+    winHabits.forEach(function(h){ winsListEl.appendChild(buildRow(h, tk, doneToday, winsToday, false)); });
+    restHabits.forEach(function(h){ listEl.appendChild(buildRow(h, tk, doneToday, winsToday, editing)); });
+
+    var nWins = winHabits.length;
+    document.getElementById("winsLabel").style.display = editing ? "none" : "block";
+    document.getElementById("winsHint").style.display = (!editing && nWins===0) ? "block" : "none";
+    document.getElementById("restLabel").style.display = (!editing && nWins>0) ? "block" : "none";
+
+    var doneCount, total;
+    if(nWins>0){
+      total=nWins; doneCount=0;
+      winHabits.forEach(function(h){ if(doneToday[h.id]) doneCount++; });
+      document.getElementById("countLabel").textContent = doneCount+" of "+total+" wins";
+    } else {
+      total=state.habits.length; doneCount=0;
+      state.habits.forEach(function(h){ if(doneToday[h.id]) doneCount++; });
+      document.getElementById("countLabel").textContent = doneCount+" of "+total;
+    }
     document.getElementById("barFill").style.width = total ? (100*doneCount/total)+"%" : "0%";
-    document.body.classList.toggle("complete", total>0 && doneCount===total);
+    document.body.classList.toggle("complete", nWins>0 && doneCount===total);
   }
 
+  // ---------- drag to reorder (edit mode) ----------
+  var dragLi=null;
+  listEl.addEventListener("pointerdown", function(e){
+    var grip = e.target.closest && e.target.closest(".grip");
+    if(!grip) return;
+    if(!document.body.classList.contains("editing")) return;
+    dragLi = grip.closest("li.habit");
+    if(!dragLi) return;
+    dragLi.classList.add("dragging");
+    try{ listEl.setPointerCapture(e.pointerId); }catch(err){}
+    e.preventDefault();
+  });
+  listEl.addEventListener("pointermove", function(e){
+    if(!dragLi) return;
+    e.preventDefault();
+    var y = e.clientY;
+    var items = Array.prototype.slice.call(listEl.querySelectorAll("li.habit"));
+    var placed = false;
+    for(var i=0;i<items.length;i++){
+      var it = items[i];
+      if(it===dragLi) continue;
+      var r = it.getBoundingClientRect();
+      if(y < r.top + r.height/2){ listEl.insertBefore(dragLi, it); placed=true; break; }
+    }
+    if(!placed) listEl.appendChild(dragLi);
+  });
+  function endDrag(){
+    if(!dragLi) return;
+    dragLi.classList.remove("dragging");
+    dragLi=null;
+    var ids = Array.prototype.map.call(listEl.querySelectorAll("li.habit"), function(li){ return li.getAttribute("data-id"); });
+    state.habits.sort(function(a,b){ return ids.indexOf(a.id) - ids.indexOf(b.id); });
+    saveCache();
+    push({action:"setHabits", habits: state.habits.map(function(h){ return {id:h.id, name:h.name}; })});
+  }
+  listEl.addEventListener("pointerup", endDrag);
+  listEl.addEventListener("pointercancel", endDrag);
+
   // ---------- edit mode ----------
-  var dragLi=null; listEl.addEventListener("pointerdown", function(e){ var grip=e.target.closest&&e.target.closest(".grip"); if(!grip) return; if(!document.body.classList.contains("editing")) return; dragLi=grip.closest("li.habit"); if(!dragLi) return; dragLi.classList.add("dragging"); try{ listEl.setPointerCapture(e.pointerId); }catch(err){} e.preventDefault(); }); listEl.addEventListener("pointermove", function(e){ if(!dragLi) return; e.preventDefault(); var y=e.clientY; var items=Array.prototype.slice.call(listEl.querySelectorAll("li.habit")); var placed=false; for(var i=0;i<items.length;i++){ var it=items[i]; if(it===dragLi) continue; var r=it.getBoundingClientRect(); if(y<r.top+r.height/2){ listEl.insertBefore(dragLi,it); placed=true; break; } } if(!placed) listEl.appendChild(dragLi); }); function endDrag(){ if(!dragLi) return; dragLi.classList.remove("dragging"); dragLi=null; var ids=Array.prototype.map.call(listEl.querySelectorAll("li.habit"), function(li){ return li.getAttribute("data-id"); }); state.habits.sort(function(a,b){ return ids.indexOf(a.id)-ids.indexOf(b.id); }); saveCache(); push({action:"setHabits", habits: state.habits.map(function(h){ return {id:h.id, name:h.name}; })}); } listEl.addEventListener("pointerup", endDrag); listEl.addEventListener("pointercancel", endDrag); document.getElementById("editBtn").onclick = function(){
+  document.getElementById("editBtn").onclick = function(){
+    if(document.activeElement && document.activeElement.blur){ document.activeElement.blur(); }
     var on = document.body.classList.toggle("editing");
     this.textContent = on ? "Done" : "Edit habits";
-    document.getElementById("addRow").style.display = on ? "flex" : "none"; if(document.activeElement && document.activeElement.blur){ document.activeElement.blur(); } render();
+    document.getElementById("addRow").style.display = on ? "flex" : "none";
+    render();
   };
   function addHabit(){
     var inp=document.getElementById("addInput"); var v=inp.value.trim(); if(!v) return;
@@ -392,10 +520,31 @@
     catch(err){ backupMsg.textContent="That didn't look like a valid backup. Nothing changed."; }
   };
 
+  // ---------- greeting ----------
+  var GREETINGS = [
+    "Hello, beautiful",
+    "Hey Wonder Woman, ready to save the day?",
+    "Morning, warrior. Let's go.",
+    "Suit up, beautiful.",
+    "Time to shine, gorgeous.",
+    "Let's make today legendary.",
+    "Another day, another victory.",
+    "You've got this, beautiful.",
+    "Go get 'em, Wonder Woman.",
+    "Ready to conquer today?",
+    "Look at you, unstoppable.",
+    "The world's lucky to have you."
+  ];
+  function setGreeting(){
+    var el = document.querySelector(".app .hello");
+    if(el){ el.textContent = GREETINGS[Math.floor(Math.random()*GREETINGS.length)]; }
+  }
+
   // ---------- screens ----------
   function showApp(){
     document.body.classList.remove("firstrun","loading");
-    document.getElementById("footer").style.display="flex"; var GG=["Hello, beautiful","Hey Wonder Woman, ready to save the day?","Morning, warrior. Let's go.","Suit up, beautiful.","Time to shine, gorgeous.","Let's make today legendary.","Another day, another victory.","You've got this, beautiful.","Go get 'em, Wonder Woman.","Ready to conquer today?","Look at you, unstoppable.","The world's lucky to have you."]; var _hg=document.querySelector(".app .hello"); if(_hg){ _hg.textContent=GG[Math.floor(Math.random()*GG.length)]; }
+    document.getElementById("footer").style.display="flex";
+    setGreeting();
   }
   function showSetup(){
     document.body.classList.add("firstrun");
@@ -440,12 +589,17 @@
   setInterval(function(){
     if(todayKey()!==lastDay){ lastDay=todayKey(); render(); }
     syncCycle();
-  }, 15*1000); window.addEventListener("focus", function(){ syncCycle(); }); window.addEventListener("pageshow", function(){ syncCycle(); }); (function(){ var _pill=document.getElementById("syncPill"); if(_pill){ _pill.style.cursor="pointer"; _pill.title="Tap to refresh"; _pill.onclick=function(){ setSync("saving","Refreshing..."); syncCycle(); }; } })();
+  }, 15*1000);
 
   // sync when the app comes back to the foreground (opening from home screen)
   document.addEventListener("visibilitychange", function(){
     if(!document.hidden) syncCycle();
   });
+  window.addEventListener("focus", function(){ syncCycle(); });
+  window.addEventListener("pageshow", function(){ syncCycle(); });
+  // tap the status dot to force an immediate refresh
+  var _pill = document.getElementById("syncPill");
+  if(_pill){ _pill.style.cursor="pointer"; _pill.title="Tap to refresh"; _pill.onclick=function(){ setSync("saving","Refreshing…"); syncCycle(); }; }
 
 })();
 </script>
