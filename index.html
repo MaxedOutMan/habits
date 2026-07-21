@@ -75,6 +75,17 @@
   body.editing .star{display:none;}
   li.habit.win{border-color:#e6cf8f;box-shadow:0 1px 2px rgba(0,0,0,.04),0 6px 18px rgba(215,173,81,.20);}
 
+  /* Adaptive columns: phone = 1, iPad landscape = 2-3. Edit mode stays single
+     column so vertical drag-to-reorder keeps working. */
+  @media (min-width:720px){
+    .wrap{max-width:900px;}
+    body:not(.editing) ul.list{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;align-items:start;}
+  }
+  @media (min-width:1080px){
+    .wrap{max-width:1160px;}
+    body:not(.editing) ul.list{grid-template-columns:repeat(3,1fr);}
+  }
+
   .addrow{display:flex;gap:10px;margin-top:16px;}
   .addrow input{flex:1;font-size:16px;padding:14px 15px;border-radius:14px;border:1px solid var(--line);
     background:#fff;color:var(--ink);outline:none;}
@@ -356,7 +367,10 @@
   var winsListEl = document.getElementById("winsList");
   var winHintDefault = "Tap the ☆ on up to 5 things below to make them today's focus.";
 
-  function winCount(w){ var n=0; for(var k in w){ if(w[k]) n++; } return n; }
+  function winCount(w){
+    var ids={}; state.habits.forEach(function(h){ ids[h.id]=true; });
+    var n=0; for(var k in w){ if(w[k] && ids[k]) n++; } return n;
+  }
 
   function toggleWin(h){
     var tk = todayKey();
@@ -404,6 +418,8 @@
       var del=document.createElement("button"); del.className="del"; del.textContent="✕";
       del.onclick=function(e){ e.stopPropagation();
         state.habits = state.habits.filter(function(x){return x.id!==h.id;});
+        for(var d in state.wins){ if(state.wins[d]) delete state.wins[d][h.id]; }
+        for(var d2 in state.done){ if(state.done[d2]) delete state.done[d2][h.id]; }
         saveCache(); render(); push({action:"deleteHabit", id:h.id});
       };
       li.appendChild(del);
